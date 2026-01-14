@@ -11,8 +11,8 @@
     "android-debug": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "lucide-react": "^0.446.0",
     "leaflet": "^1.9.4",
     "framer-motion": "^11.0.0"
