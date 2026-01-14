@@ -1,0 +1,15 @@
+
+{
+  "name": "LogiTrack Professional",
+  "short_name": "LogiTrack",
+  "description": "نظام إدارة لوجستيات احترافي - تتبع شحناتك من الصين إلى ليبيا لحظة بلحظة",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation",
+    "notifications"
+  ]
+}
