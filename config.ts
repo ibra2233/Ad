@@ -1,14 +1,18 @@
 
 /**
- * LogiTrack Master Configuration
+ * LogiTrack Configuration - Advanced Key Management
  */
-
-// 1. حدد نوع التطبيق للنسخة الحالية
-export const APP_TYPE: 'USER' | 'ADMIN' | 'DRIVER' = 'ADMIN'; 
-
-// 2. إعدادات قاعدة البيانات (Supabase)
 export const DB_CONFIG = {
   enabled: true, 
-  url: 'https://zdcngosnxowrycqtmvkt.supabase.co', 
-  key: 'sb_secret_BpHP_l0zIXG6NWh6ViTyYQ_TvKaEuoy' 
+  url: 'https://YOUR_PROJECT_REF.supabase.co', 
+  
+  // المفتاح العام (للزباين) - يسمى أحياناً Anon أو Publishable
+  publishableKey: 'YOUR_PUBLISHABLE_KEY',
+
+  // المفتاح السري (للأدمن) - يسمى Secret أو Service Role
+  // تحذير: هذا المفتاح يملك صلاحيات مطلقة على قاعدة البيانات
+  secretKey: 'YOUR_SECRET_KEY'
 };
+
+// كلمة مرور لوحة الإدارة (كطبقة حماية إضافية للواجهة)
+export const ADMIN_PASSWORD = '123'; 
