@@ -4,6 +4,7 @@ import { Language } from './types';
 import { APP_TYPE } from './config';
 import AdminView from './components/AdminView';
 import UserView from './components/UserView';
+import DriverView from './components/DriverView';
 import { Box, Lock, Truck, Languages } from 'lucide-react';
 
 const App: React.FC = () => {
