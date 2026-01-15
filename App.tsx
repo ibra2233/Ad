@@ -5,7 +5,7 @@ import { APP_TYPE } from './config';
 import AdminView from './components/AdminView';
 import UserView from './components/UserView';
 import DriverView from './components/DriverView';
-import { Box, Lock, Truck, Globe } from 'lucide-react';
+import { Box, Lock, Truck, Languages } from 'lucide-react';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('ar');
@@ -14,7 +14,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const savedLang = localStorage.getItem('app_lang');
     if (savedLang) setLang(savedLang as Language);
-    console.log("LOGITRACK_DEBUG: Current Mode is", APP_TYPE);
   }, []);
 
   const toggleLang = () => {
@@ -23,50 +22,49 @@ const App: React.FC = () => {
     localStorage.setItem('app_lang', newLang);
   };
 
-  const VersionIndicator = ({ mode }: { mode: string }) => (
-    <div className="fixed bottom-4 right-4 z-[9999] opacity-30 pointer-events-none">
-      <span className="text-[10px] font-black bg-slate-800 text-white px-3 py-1 rounded-full shadow-lg">
-        MODE: {mode}
-      </span>
-    </div>
-  );
-
+  // --- واجهة تطبيق الزبون (User APK) ---
   if (APP_TYPE === 'USER') {
     return (
       <div className={`min-h-screen bg-white flex flex-col ${isAr ? 'text-right' : 'text-left'}`} dir={isAr ? 'rtl' : 'ltr'}>
-        <VersionIndicator mode="USER" />
-        <header className="bg-white px-6 py-4 flex justify-between items-center border-b border-slate-100 sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-             <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md">
-                <Box className="w-5 h-5" />
+        <header className="bg-white px-8 py-6 flex justify-between items-center sticky top-0 z-50 border-b border-slate-50">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                <Box className="w-6 h-6" />
              </div>
-             <span className="text-xl font-black text-slate-900 tracking-tighter">LogiTrack</span>
+             <span className="text-2xl font-black text-slate-900 tracking-tighter">LogiTrack</span>
           </div>
-          <button onClick={toggleLang} className="flex items-center gap-2 text-blue-600 font-bold text-sm px-4 py-2 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
-            <Globe className="w-4 h-4" />
-            {isAr ? 'English' : 'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©'}
+          <button onClick={toggleLang} className="text-blue-600 font-black text-sm px-4 py-2 bg-blue-50 rounded-lg">
+            {isAr ? 'English' : 'العربية'}
           </button>
         </header>
         <main className="flex-1">
           <UserView lang={lang} />
         </main>
+        <footer className="py-8 text-center bg-slate-50 border-t border-slate-100">
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+            &copy; {new Date().getFullYear()} LogiTrack Customer App
+          </p>
+        </footer>
       </div>
     );
   }
 
+  // --- واجهة تطبيق الإدارة (Admin APK) ---
   if (APP_TYPE === 'ADMIN') {
     return (
       <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col ${isAr ? 'text-right' : 'text-left'}`} dir={isAr ? 'rtl' : 'ltr'}>
-        <VersionIndicator mode="ADMIN" />
-        <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-             <div className="w-9 h-9 bg-indigo-500 rounded-lg flex items-center justify-center text-white shadow-md">
+        <header className="bg-slate-900 border-b border-slate-800 px-8 py-6 flex justify-between items-center sticky top-0 z-50">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white shadow-lg">
                 <Lock className="w-5 h-5" />
              </div>
-             <span className="text-xl font-black text-white tracking-tighter">ADMIN PORTAL</span>
+             <div>
+                <div className="font-black text-xl leading-none tracking-tighter text-white">LogiTrack Admin</div>
+                <div className="text-[10px] text-blue-400 font-black uppercase mt-1">{isAr ? 'نظام الإدارة الشامل' : 'Master Control App'}</div>
+             </div>
           </div>
-          <button onClick={toggleLang} className="text-slate-400 font-bold text-sm px-4 py-2 bg-slate-800 rounded-xl hover:text-white transition-all border border-slate-700">
-            {isAr ? 'EN' : 'AR'}
+          <button onClick={toggleLang} className="text-slate-400 font-bold text-xs hover:text-white transition-colors">
+            {isAr ? 'English' : 'العربية'}
           </button>
         </header>
         <main className="flex-1 overflow-y-auto">
@@ -76,31 +74,27 @@ const App: React.FC = () => {
     );
   }
 
+  // --- واجهة تطبيق المندوب (Driver APK) ---
   if (APP_TYPE === 'DRIVER') {
     return (
-      <div className={`min-h-screen bg-blue-600 flex flex-col ${isAr ? 'text-right' : 'text-left'}`} dir={isAr ? 'rtl' : 'ltr'}>
-        <VersionIndicator mode="DRIVER" />
-        <header className="p-6 flex justify-between items-center text-white">
-          <div className="flex items-center gap-3">
-            <Truck className="w-7 h-7" />
-            <span className="font-black text-xl">DRIVER OPS</span>
+      <div className={`min-h-screen bg-blue-700 text-white flex flex-col ${isAr ? 'text-right' : 'text-left'}`} dir={isAr ? 'rtl' : 'ltr'}>
+        <header className="p-6 flex justify-between items-center">
+          <div className="font-black text-2xl flex items-center gap-3">
+            <Truck className="w-6 h-6" />
+            Driver App
           </div>
-          <button onClick={toggleLang} className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-black">
-            {isAr ? 'ENGLISH' : 'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©'}
+          <button onClick={toggleLang} className="bg-white/10 px-4 py-1.5 rounded-lg text-xs font-black">
+            {isAr ? 'EN' : 'AR'}
           </button>
         </header>
-        <main className="flex-1 bg-slate-50 rounded-t-[2.5rem] mt-2 shadow-inner overflow-y-auto">
+        <main className="flex-1 bg-white text-slate-900 rounded-t-[3rem] mt-4 shadow-2xl overflow-y-auto">
           <DriverView lang={lang} />
         </main>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 font-bold">
-      Configuration Error: Invalid APP_TYPE
-    </div>
-  );
+  return null;
 };
 
 export default App;
