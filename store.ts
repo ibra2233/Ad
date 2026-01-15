@@ -1,8 +1,7 @@
+
 import { Order, AppNotification, OrderStatus, Location } from './types';
 import { DB_CONFIG } from './config';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// التحقق من إعدادات قاعدة البيانات
 const isConfigReady = () => {
   return (
     DB_CONFIG.enabled && 
@@ -12,10 +11,9 @@ const isConfigReady = () => {
   );
 };
 
-// طلبات Supabase
 const supabaseRequest = async (table: string, method: string = 'GET', body?: any, query: string = '') => {
   if (!isConfigReady()) return null;
-
+  
   const headers: any = {
     'apikey': DB_CONFIG.key,
     'Authorization': `Bearer ${DB_CONFIG.key}`,
@@ -25,13 +23,14 @@ const supabaseRequest = async (table: string, method: string = 'GET', body?: any
   if (method === 'POST') headers['Prefer'] = 'return=representation';
 
   const url = `${DB_CONFIG.url}/rest/v1/${table}${query ? `?${query}` : (method === 'GET' ? '?select=*' : '')}`;
-
+  
   try {
     const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined
     });
+    
     if (!response.ok) return null;
     if (response.status === 204) return [];
     return await response.json();
@@ -40,7 +39,6 @@ const supabaseRequest = async (table: string, method: string = 'GET', body?: any
   }
 };
 
-// جلب الطلبات (أولاً من الإنترنت، وإذا لم يتوفر الإنترنت نأخذ من الهاتف)
 export const fetchOrders = async (): Promise<Order[]> => {
   if (isConfigReady()) {
     const data = await supabaseRequest('orders');
@@ -60,40 +58,29 @@ export const fetchOrders = async (): Promise<Order[]> => {
         customerLocation: o.customer_lat ? { lat: o.customer_lat, lng: o.customer_lng } : undefined,
         driverLocation: o.driver_lat ? { lat: o.driver_lat, lng: o.driver_lng } : undefined
       }));
-      // حفظ محلي على الهاتف
-      await AsyncStorage.setItem('logitrack_local_db', JSON.stringify(orders));
+      localStorage.setItem('logitrack_remote_db', JSON.stringify(orders));
       return orders;
     }
   }
-
-  // جلب من الهاتف إذا لم يكن هناك اتصال بالإنترنت
-  const local = await AsyncStorage.getItem('logitrack_local_db');
+  const local = localStorage.getItem('logitrack_remote_db');
   return local ? JSON.parse(local) : [];
 };
 
-// إحضار الطلبات فقط من الهاتف
-export const getOrders = async (): Promise<Order[]> => {
-  const local = await AsyncStorage.getItem('logitrack_local_db');
-  return local ? JSON.parse(local) : [];
-};
-
-// إضافة أو تعديل شحنة
 export const syncOrder = async (order: Order): Promise<void> => {
-  // تحديث محلي أولاً
+  // أولاً: التحديث في الذاكرة المحلية لضمان الاستجابة السريعة
   const currentOrders = await fetchOrders();
   const index = currentOrders.findIndex(o => o.id === order.id || o.orderCode === order.orderCode);
-  let updatedOrders: Order[];
-
+  
+  let updatedOrders;
   if (index >= 0) {
     updatedOrders = [...currentOrders];
     updatedOrders[index] = { ...order, updatedAt: Date.now() };
   } else {
     updatedOrders = [{ ...order, updatedAt: Date.now() }, ...currentOrders];
   }
+  localStorage.setItem('logitrack_remote_db', JSON.stringify(updatedOrders));
 
-  await AsyncStorage.setItem('logitrack_local_db', JSON.stringify(updatedOrders));
-
-  // التزامن مع الإنترنت إذا متاح
+  // ثانياً: التحديث في Supabase إذا كان متاحاً
   if (isConfigReady()) {
     const dbOrder = {
       order_code: order.orderCode,
@@ -107,65 +94,44 @@ export const syncOrder = async (order: Order): Promise<void> => {
       current_location: order.currentPhysicalLocation || '',
       updated_at: new Date().toISOString()
     };
-
+    
     const check = await supabaseRequest('orders', 'GET', null, `order_code=eq.${order.orderCode}`);
     if (check && check.length > 0) {
       await supabaseRequest('orders', 'PATCH', dbOrder, `order_code=eq.${order.orderCode}`);
     } else {
       await supabaseRequest('orders', 'POST', dbOrder);
     }
-
-    // إضافة إشعار تلقائي عند تحديث الحالة
-    await supabaseRequest('notifications', 'POST', {
-      order_code: order.orderCode,
-      title: 'تحديث حالة الشحنة',
-      body: `تم تحديث حالة شحنتك (${order.orderCode}) إلى: ${order.status}`,
-    });
   }
-
+  
   window.dispatchEvent(new Event('storage'));
 };
 
-// تحديث موقع العميل أو السائق
-export const updateOrderLocation = async (orderCode: string, type: 'customer' | 'driver', location: Location) => {
-  if (isConfigReady()) {
-    const fieldLat = type === 'customer' ? 'customer_lat' : 'driver_lat';
-    const fieldLng = type === 'customer' ? 'customer_lng' : 'driver_lng';
-    await supabaseRequest('orders', 'PATCH', { 
-      [fieldLat]: location.lat, 
-      [fieldLng]: location.lng 
-    }, `order_code=eq.${orderCode}`);
-  }
-};
-
-// حذف شحنة
 export const deleteOrder = async (id: string): Promise<void> => {
-  // حذف محلي أولاً
+  // حذف محلي
   const currentOrders = await fetchOrders();
   const updatedOrders = currentOrders.filter(o => o.id !== id);
-  await AsyncStorage.setItem('logitrack_local_db', JSON.stringify(updatedOrders));
+  localStorage.setItem('logitrack_remote_db', JSON.stringify(updatedOrders));
 
-  // حذف من الإنترنت
+  // حذف من السيرفر
   if (isConfigReady()) {
     await supabaseRequest('orders', 'DELETE', null, `id=eq.${id}`);
   }
-
+  
   window.dispatchEvent(new Event('storage'));
 };
 
-// جلب الإشعارات
 export const fetchNotifications = async (): Promise<AppNotification[]> => {
   if (isConfigReady()) {
     const data = await supabaseRequest('notifications');
     if (data && Array.isArray(data)) {
-      return data.map(n => ({
-        id: n.id,
-        orderCode: n.order_code,
-        title: n.title,
-        body: n.body,
-        isRead: n.is_read,
-        timestamp: new Date(n.created_at).getTime()
-      }));
+        return data.map(n => ({
+            id: n.id,
+            orderCode: n.order_code,
+            title: n.title,
+            body: n.body,
+            isRead: n.is_read,
+            timestamp: new Date(n.created_at).getTime()
+        }));
     }
   }
   return [];
