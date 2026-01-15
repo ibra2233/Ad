@@ -66,21 +66,12 @@ export const fetchOrders = async (): Promise<Order[]> => {
   return local ? JSON.parse(local) : [];
 };
 
-export const syncOrder = async (order: Order): Promise<void> => {
-  // أولاً: التحديث في الذاكرة المحلية لضمان الاستجابة السريعة
-  const currentOrders = await fetchOrders();
-  const index = currentOrders.findIndex(o => o.id === order.id || o.orderCode === order.orderCode);
-  
-  let updatedOrders;
-  if (index >= 0) {
-    updatedOrders = [...currentOrders];
-    updatedOrders[index] = { ...order, updatedAt: Date.now() };
-  } else {
-    updatedOrders = [{ ...order, updatedAt: Date.now() }, ...currentOrders];
-  }
-  localStorage.setItem('logitrack_remote_db', JSON.stringify(updatedOrders));
+export const getOrders = (): Order[] => {
+  const local = localStorage.getItem('logitrack_remote_db');
+  return local ? JSON.parse(local) : [];
+};
 
-  // ثانياً: التحديث في Supabase إذا كان متاحاً
+export const syncOrder = async (order: Order): Promise<void> => {
   if (isConfigReady()) {
     const dbOrder = {
       order_code: order.orderCode,
@@ -91,7 +82,7 @@ export const syncOrder = async (order: Order): Promise<void> => {
       quantity: order.quantity,
       total_price: order.totalPrice,
       status: order.status,
-      current_location: order.currentPhysicalLocation || '',
+      current_location: order.currentPhysicalLocation,
       updated_at: new Date().toISOString()
     };
     
@@ -101,22 +92,34 @@ export const syncOrder = async (order: Order): Promise<void> => {
     } else {
       await supabaseRequest('orders', 'POST', dbOrder);
     }
+
+    // إضافة إشعار تلقائي عند تحديث الحالة
+    await supabaseRequest('notifications', 'POST', {
+      order_code: order.orderCode,
+      title: 'تحديث حالة الشحنة',
+      body: `تم تحديث حالة شحنتك (${order.orderCode}) إلى: ${order.status}`,
+    });
   }
-  
+  await fetchOrders();
   window.dispatchEvent(new Event('storage'));
 };
 
-export const deleteOrder = async (id: string): Promise<void> => {
-  // حذف محلي
-  const currentOrders = await fetchOrders();
-  const updatedOrders = currentOrders.filter(o => o.id !== id);
-  localStorage.setItem('logitrack_remote_db', JSON.stringify(updatedOrders));
+export const updateOrderLocation = async (orderCode: string, type: 'customer' | 'driver', location: Location) => {
+  if (isConfigReady()) {
+    const fieldLat = type === 'customer' ? 'customer_lat' : 'driver_lat';
+    const fieldLng = type === 'customer' ? 'customer_lng' : 'driver_lng';
+    await supabaseRequest('orders', 'PATCH', { 
+      [fieldLat]: location.lat, 
+      [fieldLng]: location.lng 
+    }, `order_code=eq.${orderCode}`);
+  }
+};
 
-  // حذف من السيرفر
+export const deleteOrder = async (id: string): Promise<void> => {
   if (isConfigReady()) {
     await supabaseRequest('orders', 'DELETE', null, `id=eq.${id}`);
   }
-  
+  await fetchOrders();
   window.dispatchEvent(new Event('storage'));
 };
 
