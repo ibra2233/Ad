@@ -1,6 +1,8 @@
-
 import { Order, AppNotification, OrderStatus, Location } from './types';
 import { DB_CONFIG } from './config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LOCAL_KEY = 'logitrack_local_db';
 
 const isConfigReady = () => {
   return (
@@ -39,7 +41,10 @@ const supabaseRequest = async (table: string, method: string = 'GET', body?: any
   }
 };
 
+// ========== Local + Cloud Storage ==========
+
 export const fetchOrders = async (): Promise<Order[]> => {
+  // أولًا: جلب من الإنترنت إذا متاح
   if (isConfigReady()) {
     const data = await supabaseRequest('orders');
     if (data && Array.isArray(data)) {
@@ -58,20 +63,35 @@ export const fetchOrders = async (): Promise<Order[]> => {
         customerLocation: o.customer_lat ? { lat: o.customer_lat, lng: o.customer_lng } : undefined,
         driverLocation: o.driver_lat ? { lat: o.driver_lat, lng: o.driver_lng } : undefined
       }));
-      localStorage.setItem('logitrack_remote_db', JSON.stringify(orders));
+      await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(orders));
       return orders;
     }
   }
-  const local = localStorage.getItem('logitrack_remote_db');
+
+  // إذا الإنترنت غير متاح، استخدم النسخة المحلية
+  const local = await AsyncStorage.getItem(LOCAL_KEY);
   return local ? JSON.parse(local) : [];
 };
 
-export const getOrders = (): Order[] => {
-  const local = localStorage.getItem('logitrack_remote_db');
+export const getOrders = async (): Promise<Order[]> => {
+  const local = await AsyncStorage.getItem(LOCAL_KEY);
   return local ? JSON.parse(local) : [];
 };
 
 export const syncOrder = async (order: Order): Promise<void> => {
+  // 1️⃣ تحديث محلي
+  const currentOrders = await getOrders();
+  const index = currentOrders.findIndex(o => o.id === order.id || o.orderCode === order.orderCode);
+  let updatedOrders;
+  if (index >= 0) {
+    updatedOrders = [...currentOrders];
+    updatedOrders[index] = { ...order, updatedAt: Date.now() };
+  } else {
+    updatedOrders = [{ ...order, updatedAt: Date.now() }, ...currentOrders];
+  }
+  await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(updatedOrders));
+
+  // 2️⃣ تحديث سحابي إذا متصل
   if (isConfigReady()) {
     const dbOrder = {
       order_code: order.orderCode,
@@ -93,14 +113,14 @@ export const syncOrder = async (order: Order): Promise<void> => {
       await supabaseRequest('orders', 'POST', dbOrder);
     }
 
-    // إضافة إشعار تلقائي عند تحديث الحالة
+    // إشعار تلقائي عند تحديث الحالة
     await supabaseRequest('notifications', 'POST', {
       order_code: order.orderCode,
       title: 'تحديث حالة الشحنة',
       body: `تم تحديث حالة شحنتك (${order.orderCode}) إلى: ${order.status}`,
     });
   }
-  await fetchOrders();
+
   window.dispatchEvent(new Event('storage'));
 };
 
@@ -116,10 +136,16 @@ export const updateOrderLocation = async (orderCode: string, type: 'customer' | 
 };
 
 export const deleteOrder = async (id: string): Promise<void> => {
+  // حذف محلي
+  const currentOrders = await getOrders();
+  const updatedOrders = currentOrders.filter(o => o.id !== id);
+  await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(updatedOrders));
+
+  // حذف من السيرفر
   if (isConfigReady()) {
     await supabaseRequest('orders', 'DELETE', null, `id=eq.${id}`);
   }
-  await fetchOrders();
+
   window.dispatchEvent(new Event('storage'));
 };
 
