@@ -24,4 +24,4 @@ export const DB_CONFIG = {
 export const ADMIN_PASSWORD = '123'; 
 
 // وضع التطبيق الحالي
-export const APP_TYPE: 'admin' | 'customer' = 'customer';
+export const APP_TYPE: 'admin' | 'customer' = 'ADMIN';
