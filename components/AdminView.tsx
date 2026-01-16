@@ -40,6 +40,7 @@ const AdminView: React.FC<Props> = ({ lang }) => {
       setLoading(true);
       setError(null);
       const data = await fetchOrders('admin');
+      // التأكد أن البيانات دائماً مصفوفة
       setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to load orders:", err);
@@ -51,9 +52,6 @@ const AdminView: React.FC<Props> = ({ lang }) => {
 
   useEffect(() => {
     loadData();
-    // استماع لتحديثات التخزين المحلي إذا لزم الأمر
-    window.addEventListener('storage', loadData);
-    return () => window.removeEventListener('storage', loadData);
   }, []);
 
   const handleSave = async () => {
@@ -85,14 +83,14 @@ const AdminView: React.FC<Props> = ({ lang }) => {
   };
 
   const exportToCSV = () => {
-    if (orders.length === 0) return;
+    if (!Array.isArray(orders) || orders.length === 0) return;
     const headers = ['Order Code', 'Customer', 'Product', 'Status', 'Price', 'Location'];
     const rows = orders.map(o => [
-      o.orderCode,
-      `"${o.customerName}"`,
+      o.orderCode || '',
+      `"${o.customerName || ''}"`,
       `"${o.productName || ''}"`,
-      o.status,
-      o.totalPrice,
+      o.status || '',
+      o.totalPrice || 0,
       `"${o.currentPhysicalLocation || ''}"`
     ].join(','));
     
@@ -106,17 +104,16 @@ const AdminView: React.FC<Props> = ({ lang }) => {
     document.body.removeChild(link);
   };
 
-  // تصفية الشحنات مع حماية ضد القيم الفارغة
-  const filteredOrders = orders.filter(o => {
-    const code = (o.orderCode || '').toLowerCase();
-    const name = (o.customerName || '').toLowerCase();
-    const search = searchTerm.toLowerCase();
+  // تصفية الشحنات مع حماية قصوى ضد القيم الفارغة
+  const filteredOrders = Array.isArray(orders) ? orders.filter(o => {
+    const code = String(o.orderCode || '').toLowerCase();
+    const name = String(o.customerName || '').toLowerCase();
+    const search = String(searchTerm || '').toLowerCase();
     return code.includes(search) || name.includes(search);
-  });
+  }) : [];
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto pb-32">
-      {/* Header Actions */}
       <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 mb-10">
         <div className="flex flex-1 gap-2">
           <div className="relative flex-1 text-right">
@@ -238,7 +235,7 @@ const AdminView: React.FC<Props> = ({ lang }) => {
               <div className="space-y-4">
                 <input className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-indigo-500" placeholder={isAr ? 'المنتج' : 'Product'} value={editingOrder.productName || ''} onChange={e => setEditingOrder({...editingOrder, productName: e.target.value})} />
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="number" className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-black" placeholder={isAr ? 'السعر' : 'Price'} value={editingOrder.totalPrice || 0} onChange={e => setEditingOrder({...editingOrder, totalPrice: parseFloat(e.target.value)})} />
+                  <input type="number" className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-black" placeholder={isAr ? 'السعر' : 'Price'} value={editingOrder.totalPrice || 0} onChange={e => setEditingOrder({...editingOrder, totalPrice: parseFloat(e.target.value) || 0})} />
                   <select className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none" value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value as OrderStatus})}>
                     {Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
