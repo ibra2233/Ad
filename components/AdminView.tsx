@@ -12,7 +12,12 @@ import {
   Save, 
   RefreshCw, 
   Download,
-  AlertCircle
+  AlertCircle,
+  LayoutDashboard,
+  Package,
+  TrendingUp,
+  CheckCircle,
+  User
 } from 'lucide-react';
 
 interface Props { lang: Language; }
@@ -27,11 +32,11 @@ const AdminView: React.FC<Props> = ({ lang }) => {
   const [error, setError] = useState<string | null>(null);
 
   const statusLabels: Record<OrderStatus, string> = {
-    'China_Store': isAr ? 'بانتظار الشحن' : 'Pending',
-    'China_Warehouse': isAr ? 'في مخزن الصين' : 'Warehouse CN',
-    'En_Route': isAr ? 'في الشحن الدولي' : 'En Route',
-    'Libya_Warehouse': isAr ? 'وصلت ليبيا' : 'Warehouse LY',
-    'Out_for_Delivery': isAr ? 'خرجت للتوصيل' : 'Out for Delivery',
+    'China_Store': isAr ? 'في المتجر' : 'In Store',
+    'China_Warehouse': isAr ? 'مخزن الصين' : 'CN Warehouse',
+    'En_Route': isAr ? 'في الطريق' : 'En Route',
+    'Libya_Warehouse': isAr ? 'مخزن ليبيا' : 'LY Warehouse',
+    'Out_for_Delivery': isAr ? 'مع المندوب' : 'Out for Delivery',
     'Delivered': isAr ? 'تم التسليم' : 'Delivered'
   };
 
@@ -39,8 +44,7 @@ const AdminView: React.FC<Props> = ({ lang }) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchOrders('admin');
-      // التأكد أن البيانات دائماً مصفوفة
+      const data = await fetchOrders();
       setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to load orders:", err);
@@ -64,7 +68,7 @@ const AdminView: React.FC<Props> = ({ lang }) => {
       setIsProcessing(true);
       const orderData = {
         ...editingOrder,
-        id: editingOrder.id || `temp-${Date.now()}`,
+        id: editingOrder.id || `ord-${Date.now()}`,
         updatedAt: Date.now(),
         currentPhysicalLocation: editingOrder.currentPhysicalLocation || statusLabels[editingOrder.status as OrderStatus || 'China_Store'],
         quantity: Number(editingOrder.quantity) || 1,
@@ -104,7 +108,6 @@ const AdminView: React.FC<Props> = ({ lang }) => {
     document.body.removeChild(link);
   };
 
-  // تصفية الشحنات مع حماية قصوى ضد القيم الفارغة
   const filteredOrders = Array.isArray(orders) ? orders.filter(o => {
     const code = String(o.orderCode || '').toLowerCase();
     const name = String(o.customerName || '').toLowerCase();
@@ -114,9 +117,35 @@ const AdminView: React.FC<Props> = ({ lang }) => {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto pb-32">
+      {/* Stats Summary Section */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <Package className="text-blue-600 mb-2 w-6 h-6" />
+          <p className="text-xs font-black text-slate-400 uppercase">{isAr ? 'إجمالي الشحنات' : 'Total Orders'}</p>
+          <p className="text-3xl font-black">{orders.length}</p>
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <TrendingUp className="text-orange-500 mb-2 w-6 h-6" />
+          <p className="text-xs font-black text-slate-400 uppercase">{isAr ? 'في الطريق' : 'En Route'}</p>
+          <p className="text-3xl font-black">{orders.filter(o => o.status === 'En_Route').length}</p>
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+          <CheckCircle className="text-emerald-500 mb-2 w-6 h-6" />
+          <p className="text-xs font-black text-slate-400 uppercase">{isAr ? 'تم التسليم' : 'Delivered'}</p>
+          <p className="text-3xl font-black">{orders.filter(o => o.status === 'Delivered').length}</p>
+        </div>
+        <button 
+          onClick={() => setEditingOrder({ status: 'China_Store', orderCode: 'LY-', customerName: '', quantity: 1, totalPrice: 0 })}
+          className="bg-emerald-600 text-white p-6 rounded-[2rem] shadow-xl shadow-emerald-900/20 flex flex-col items-center justify-center gap-2 hover:bg-emerald-500 transition-all"
+        >
+          <Plus className="w-8 h-8" />
+          <span className="font-black">{isAr ? 'شحنة جديدة' : 'Add New'}</span>
+        </button>
+      </div>
+
       <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 mb-10">
         <div className="flex flex-1 gap-2">
-          <div className="relative flex-1 text-right">
+          <div className="relative flex-1">
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
             <input 
               type="text" 
@@ -126,25 +155,17 @@ const AdminView: React.FC<Props> = ({ lang }) => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button onClick={loadData} className="px-6 bg-slate-800 text-white rounded-2xl hover:bg-slate-700 transition-all">
+          <button onClick={loadData} className="px-6 bg-slate-800 text-white rounded-2xl hover:bg-slate-700 transition-all flex items-center justify-center">
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
         
-        <div className="flex flex-wrap gap-3">
-          <button 
-            onClick={exportToCSV}
-            className="flex-1 lg:flex-none px-6 py-4 bg-slate-800 text-slate-300 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-all"
-          >
-            <Download className="w-5 h-5" /> {isAr ? 'تصدير' : 'Export'}
-          </button>
-          <button 
-            onClick={() => setEditingOrder({ status: 'China_Store', orderCode: 'LY-', customerName: '', quantity: 1, totalPrice: 0 })}
-            className="flex-1 lg:flex-none px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20"
-          >
-            <Plus className="w-6 h-6" /> {isAr ? 'شحنة جديدة' : 'Add New'}
-          </button>
-        </div>
+        <button 
+          onClick={exportToCSV}
+          className="px-6 py-4 bg-slate-800 text-slate-300 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-all"
+        >
+          <Download className="w-5 h-5" /> {isAr ? 'تصدير CSV' : 'Export CSV'}
+        </button>
       </div>
 
       {error && (
@@ -165,10 +186,10 @@ const AdminView: React.FC<Props> = ({ lang }) => {
             <table className="w-full text-right" dir={isAr ? 'rtl' : 'ltr'}>
               <thead>
                 <tr className="bg-slate-800 text-slate-400 text-[10px] font-black tracking-widest uppercase">
-                  <th className="px-8 py-5">{isAr ? 'كود الشحنة' : 'Code'}</th>
-                  <th className="px-8 py-5">{isAr ? 'الزبون' : 'Customer'}</th>
-                  <th className="px-8 py-5">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className={`px-8 py-5 ${isAr ? 'text-left' : 'text-right'}`}>{isAr ? 'إدارة' : 'Actions'}</th>
+                  <th className="px-8 py-5 text-right">{isAr ? 'كود الشحنة' : 'Code'}</th>
+                  <th className="px-8 py-5 text-right">{isAr ? 'الزبون' : 'Customer'}</th>
+                  <th className="px-8 py-5 text-right">{isAr ? 'الحالة' : 'Status'}</th>
+                  <th className="px-8 py-5 text-left">{isAr ? 'إدارة' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -186,7 +207,7 @@ const AdminView: React.FC<Props> = ({ lang }) => {
                         {statusLabels[order.status] || order.status}
                       </span>
                     </td>
-                    <td className={`px-8 py-6 flex gap-2 ${isAr ? 'justify-start' : 'justify-end'}`}>
+                    <td className="px-8 py-6 flex gap-2 justify-start">
                       <button onClick={() => setEditingOrder(order)} className="p-3 bg-indigo-600/10 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"><Edit2 className="w-4 h-4" /></button>
                       <button onClick={async () => { if(confirm(isAr ? 'حذف؟' : 'Delete?')) { await deleteOrder(order.id); loadData(); } }} className="p-3 bg-red-600/10 text-red-400 rounded-xl hover:bg-red-600 hover:text-white transition-all"><Trash2 className="w-4 h-4" /></button>
                     </td>
@@ -204,7 +225,6 @@ const AdminView: React.FC<Props> = ({ lang }) => {
         </div>
       )}
 
-      {/* Modal / Editor */}
       {editingOrder && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[9999] overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-4xl p-8 md:p-10 shadow-2xl my-auto animate-in zoom-in-95 duration-200">
@@ -227,19 +247,34 @@ const AdminView: React.FC<Props> = ({ lang }) => {
               </div>
               
               <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'اسم الزبون' : 'Customer Name'}</label>
                 <input className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-indigo-500" placeholder={isAr ? 'اسم الزبون' : 'Customer Name'} value={editingOrder.customerName || ''} onChange={e => setEditingOrder({...editingOrder, customerName: e.target.value})} />
+                
+                <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'رقم الهاتف' : 'Phone'}</label>
                 <input className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-indigo-500" placeholder={isAr ? 'رقم الهاتف' : 'Phone'} value={editingOrder.customerPhone || ''} onChange={e => setEditingOrder({...editingOrder, customerPhone: e.target.value})} />
+                
+                <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'العنوان' : 'Address'}</label>
                 <input className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-indigo-500" placeholder={isAr ? 'العنوان' : 'Address'} value={editingOrder.customerAddress || ''} onChange={e => setEditingOrder({...editingOrder, customerAddress: e.target.value})} />
               </div>
               
               <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'اسم المنتج' : 'Product'}</label>
                 <input className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-indigo-500" placeholder={isAr ? 'المنتج' : 'Product'} value={editingOrder.productName || ''} onChange={e => setEditingOrder({...editingOrder, productName: e.target.value})} />
+                
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="number" className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-black" placeholder={isAr ? 'السعر' : 'Price'} value={editingOrder.totalPrice || 0} onChange={e => setEditingOrder({...editingOrder, totalPrice: parseFloat(e.target.value) || 0})} />
-                  <select className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none" value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value as OrderStatus})}>
-                    {Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'السعر' : 'Price'}</label>
+                    <input type="number" className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-black" placeholder={isAr ? 'السعر' : 'Price'} value={editingOrder.totalPrice || 0} onChange={e => setEditingOrder({...editingOrder, totalPrice: parseFloat(e.target.value) || 0})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'الحالة' : 'Status'}</label>
+                    <select className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none" value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value as OrderStatus})}>
+                      {Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </div>
                 </div>
+                
+                <label className="text-[10px] font-black text-slate-400 block uppercase mb-1">{isAr ? 'الموقع الفعلي' : 'Physical Location'}</label>
                 <input className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-blue-400 font-bold" placeholder={isAr ? 'الموقع الحالي (نصي)' : 'Physical Location'} value={editingOrder.currentPhysicalLocation || ''} onChange={e => setEditingOrder({...editingOrder, currentPhysicalLocation: e.target.value})} />
               </div>
             </div>
