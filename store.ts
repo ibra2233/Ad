@@ -3,18 +3,47 @@ import { Order, OrderStatus } from './types';
 import { DB_CONFIG } from './config';
 
 /**
+ * تحويل الكائن من تنسيق التطبيق إلى تنسيق قاعدة البيانات
+ */
+const mapToDb = (order: Partial<Order>) => ({
+  order_code: order.orderCode || '',
+  customer_name: order.customerName || '',
+  customer_phone: order.customerPhone || '',
+  customer_address: order.customerAddress || '',
+  product_name: order.productName || '',
+  quantity: order.quantity || 1,
+  total_price: order.totalPrice || 0,
+  status: order.status || 'China_Store',
+  current_location: order.currentPhysicalLocation || '',
+  updated_at: order.updatedAt ? new Date(order.updatedAt).toISOString() : new Date().toISOString()
+});
+
+/**
+ * تحويل الكائن من تنسيق قاعدة البيانات إلى تنسيق التطبيق مع حماية ضد القيم الفارغة
+ */
+const mapFromDb = (dbOrder: any): Order => ({
+  id: dbOrder.id || Math.random().toString(36).substr(2, 9),
+  orderCode: dbOrder.order_code || 'N/A',
+  customerName: dbOrder.customer_name || 'No Name',
+  customerPhone: dbOrder.customer_phone || '',
+  customerAddress: dbOrder.customer_address || '',
+  productName: dbOrder.product_name || '',
+  quantity: Number(dbOrder.quantity) || 1,
+  totalPrice: Number(dbOrder.total_price) || 0,
+  status: (dbOrder.status as OrderStatus) || 'China_Store',
+  currentPhysicalLocation: dbOrder.current_location || '',
+  updatedAt: dbOrder.updated_at ? new Date(dbOrder.updated_at).getTime() : Date.now()
+});
+
+/**
  * التحقق من جاهزية الإعدادات
  */
 export const isConfigReady = (role: 'admin' | 'user' = 'user'): boolean => {
   const url = DB_CONFIG.url;
-  // إذا كان الأدمن لا يملك مفتاح سري، نتحقق من وجود المفتاح العام على الأقل
   const key = (role === 'admin' && DB_CONFIG.secretKey) ? DB_CONFIG.secretKey : DB_CONFIG.publishableKey;
   return !!(url && !url.includes('YOUR_PROJECT_REF') && key && key.length > 10);
 };
 
-/**
- * محرك الطلبات المركزي لـ Supabase REST API
- */
 const supabaseRequest = async (
   table: string, 
   method: string = 'GET', 
@@ -22,17 +51,9 @@ const supabaseRequest = async (
   query: string = '', 
   role: 'admin' | 'user' = 'user'
 ) => {
-  if (!isConfigReady(role)) {
-    console.warn(`Configuration missing or invalid for role: ${role}`);
-    return null;
-  }
+  if (!isConfigReady(role)) return null;
   
-  // نستخدم السري للأدمن، وإذا لم يتوفر نستخدم العام (Anon)
-  let key = role === 'admin' ? DB_CONFIG.secretKey : DB_CONFIG.publishableKey;
-  if (role === 'admin' && !key) {
-    key = DB_CONFIG.publishableKey;
-    console.info('Admin: Secret key missing, falling back to Anon key.');
-  }
+  const key = role === 'admin' ? (DB_CONFIG.secretKey || DB_CONFIG.publishableKey) : DB_CONFIG.publishableKey;
 
   const headers: Record<string, string> = {
     'apikey': key,
@@ -42,9 +63,11 @@ const supabaseRequest = async (
 
   if (method !== 'GET') {
     headers['Prefer'] = 'return=representation';
+    if (method === 'POST') {
+      headers['Prefer'] += ',resolution=merge-duplicates';
+    }
   }
 
-  // بناء الرابط بشكل صحيح
   const baseUrl = `${DB_CONFIG.url}/rest/v1/${table}`;
   let url = baseUrl;
   
@@ -62,72 +85,43 @@ const supabaseRequest = async (
     });
     
     if (!response.ok) {
-      const err = await response.json();
-      console.error('Supabase Error Detailed:', err);
-      // تنبيه في الكونسول إذا كانت المشكلة في الصلاحيات
-      if (response.status === 401 || response.status === 403) {
-        console.error('Permission Denied: Check your RLS policies in Supabase.');
-      }
+      console.error('Supabase Error:', await response.text());
       return null;
     }
     
     return response.status === 204 ? [] : await response.json();
   } catch (error) {
-    console.error('Network/Fetch Error:', error);
+    console.error('Network Error:', error);
     return null;
   }
 };
 
 export const fetchOrders = async (role: 'admin' | 'user' = 'user'): Promise<Order[]> => {
-  const data = await supabaseRequest('orders', 'GET', null, 'order=updated_at.desc', role);
-  if (data && Array.isArray(data)) {
-    return data.map(o => ({
-      id: o.id,
-      orderCode: o.order_code,
-      customerName: o.customer_name,
-      customerPhone: o.customer_phone || '',
-      customerAddress: o.customer_address || '',
-      productName: o.product_name || '',
-      quantity: Number(o.quantity) || 1,
-      totalPrice: Number(o.total_price) || 0,
-      status: o.status as OrderStatus,
-      currentPhysicalLocation: o.current_location || '',
-      updatedAt: new Date(o.updated_at).getTime()
-    }));
+  try {
+    const data = await supabaseRequest('orders', 'GET', null, 'select=*&order=updated_at.desc', role);
+    if (data && Array.isArray(data)) {
+      return data.map(mapFromDb);
+    }
+  } catch (e) {
+    console.error("Error fetching orders:", e);
   }
   return [];
 };
 
-export const syncOrder = async (order: Order): Promise<void> => {
-  const dbOrder = {
-    order_code: order.orderCode,
-    customer_name: order.customerName,
-    customer_phone: order.customerPhone,
-    customer_address: order.customerAddress,
-    product_name: order.productName,
-    quantity: order.quantity,
-    total_price: order.totalPrice,
-    status: order.status,
-    current_location: order.currentPhysicalLocation || '',
-    updated_at: new Date().toISOString()
-  };
-  
-  // التحقق من وجود الطلب مسبقاً للكود
-  const check = await supabaseRequest('orders', 'GET', null, `order_code=eq.${order.orderCode}`, 'admin');
-  
-  if (check && check.length > 0) {
-    // تحديث
-    await supabaseRequest('orders', 'PATCH', dbOrder, `order_code=eq.${order.orderCode}`, 'admin');
+export const syncOrder = async (order: Order): Promise<Order | null> => {
+  const existing = await supabaseRequest('orders', 'GET', null, `order_code=eq.${order.orderCode}`, 'admin');
+  const dbData = mapToDb(order);
+
+  if (existing && existing.length > 0) {
+    const result = await supabaseRequest('orders', 'PATCH', dbData, `order_code=eq.${order.orderCode}`, 'admin');
+    return result && result.length > 0 ? mapFromDb(result[0]) : null;
   } else {
-    // إضافة جديد
-    await supabaseRequest('orders', 'POST', dbOrder, '', 'admin');
+    const result = await supabaseRequest('orders', 'POST', dbData, '', 'admin');
+    return result && result.length > 0 ? mapFromDb(result[0]) : null;
   }
-  
-  // إرسال حدث لتحديث الواجهة
-  window.dispatchEvent(new Event('storage'));
 };
 
-export const deleteOrder = async (id: string): Promise<void> => {
-  await supabaseRequest('orders', 'DELETE', null, `id=eq.${id}`, 'admin');
-  window.dispatchEvent(new Event('storage'));
+export const deleteOrder = async (id: string): Promise<boolean> => {
+  const data = await supabaseRequest('orders', 'DELETE', null, `id=eq.${id}`, 'admin');
+  return data !== null;
 };
